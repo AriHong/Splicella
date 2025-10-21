@@ -188,7 +188,7 @@ class SplicellaDCI:
 
 
 
-class SplicellaDCI:
+class SplicellaDCI_pairwise:
     def __init__(self,
                 isoform_anndata, 
                 by='celltype', 
