@@ -13,8 +13,7 @@ class SplicellaDCI:
                 gene_name='gene_name'):
         self.iad = isoform_anndata
         self.state = by
-        self.states = self.iad.obs['celltype'].cat.categories
-        self.by = by
+        self.states = self.iad.obs[by].cat.categories
         self.layer = layer
         self.gene_name = gene_name
 
@@ -36,7 +35,7 @@ class SplicellaDCI:
 
         #genecount
         self.gene_agg = sc.get.aggregate(self.iad, by=self.gene_name, axis=1, layer=self.layer, func='sum')
-        self.gene_agg = sc.get.aggregate(self.gene_agg, by=self.by, layer='sum', func='sum') #genecount by celltype
+        self.gene_agg = sc.get.aggregate(self.gene_agg, by=self.state, layer='sum', func='sum') #genecount by celltype
 
         comp_geneagg = np.zeros(self.gene_agg.shape)
         for i in range(self.gene_agg.n_obs):
@@ -47,7 +46,7 @@ class SplicellaDCI:
 
         #percent of gene detection per cell
         genecount_agg = sc.get.aggregate(self.iad, by=self.gene_name, layer=self.layer,  func='count_nonzero', axis=1)
-        genecount_agg = sc.get.aggregate(genecount_agg, by=self.by, layer='count_nonzero', func='count_nonzero') #gene exist by celltype
+        genecount_agg = sc.get.aggregate(genecount_agg, by=self.state, layer='count_nonzero', func='count_nonzero') #gene exist by celltype
 
         self.gene_detect_df = pd.DataFrame(genecount_agg.layers['count_nonzero'],
                                   index=genecount_agg.obs_names,
@@ -61,8 +60,8 @@ class SplicellaDCI:
                                   index=genecount_agg.obs_names,
                                   columns=genecount_agg.var_names)
         
-        self.celltype_counts = self.iad.obs['celltype'].value_counts()[self.gene_detect_df.index]
-        self.celltype_comp_counts = self.iad.n_obs - self.iad.obs['celltype'].value_counts()[self.gene_detect_comp_df.index]
+        self.celltype_counts = self.iad.obs[self.state].value_counts()[self.gene_detect_df.index]
+        self.celltype_comp_counts = self.iad.n_obs - self.iad.obs[self.state].value_counts()[self.gene_detect_comp_df.index]
 
         self.gene_detect_percent_df = self.gene_detect_df.T*100/self.celltype_counts[genecount_agg.obs_names]
         self.gene_detect_comp_percent_df = self.gene_detect_comp_df.T*100/self.celltype_comp_counts[genecount_agg.obs_names]
@@ -199,8 +198,7 @@ class SplicellaDCI_pairwise:
                 gene_name='gene_name'):
         self.iad = isoform_anndata
         self.state = by
-        self.states = self.iad.obs['celltype'].cat.categories
-        self.by = by
+        self.states = self.iad.obs[self.state].cat.categories
         self.layer = layer
         self.gene_name = gene_name
 
@@ -216,10 +214,10 @@ class SplicellaDCI_pairwise:
         self.iso_agg = sc.get.aggregate(self.iad, by=self.state, layer=self.layer, func='sum')
         
         gene_agg = sc.get.aggregate(self.iad, by=self.gene_name, axis=1, layer=self.layer, func='sum')
-        gene_agg = sc.get.aggregate(gene_agg, by=self.by, layer='sum', func='sum')
+        gene_agg = sc.get.aggregate(gene_agg, by=self.state, layer='sum', func='sum')
     
         genecount_agg = sc.get.aggregate(self.iad, by=self.gene_name, layer=self.layer,  func='count_nonzero', axis=1)
-        genecount_agg = sc.get.aggregate(genecount_agg, by=self.by, layer='count_nonzero', func='count_nonzero')
+        genecount_agg = sc.get.aggregate(genecount_agg, by=self.state, layer='count_nonzero', func='count_nonzero')
     
         self.gene_sum_df = pd.DataFrame(gene_agg.layers['sum'], 
                                index=gene_agg.obs_names,
@@ -228,7 +226,7 @@ class SplicellaDCI_pairwise:
                                   index=genecount_agg.obs_names,
                                   columns=genecount_agg.var_names)
     
-        self.gene_detect_percent_df = self.gene_detect_df.T*100/np.unique(self.iad.obs[self.by],
+        self.gene_detect_percent_df = self.gene_detect_df.T*100/np.unique(self.iad.obs[self.state],
                                                                   return_counts=True)[1]
         
         total_gc_forprev = []
