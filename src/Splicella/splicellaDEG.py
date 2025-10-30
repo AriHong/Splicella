@@ -183,26 +183,34 @@ class SplicellaDEG_sampling:
 
         else:
             for state in self.states:
-                state_conv = 'others'
-                by = f'celltype_{state}'
-                compare =f'{state}_{state_conv}'
-                if self.repeat:
-                    DEG_df, lfc_df, pval_df = self.DEA_result_per_gene(deg_df_all, compare)
-                    Lrs, tau, q, PFER, nosampled_DEG = self.compute_tau(gene_detect_df, DEG_df, by, state, state_conv)
-                    robustDEG_summary, pval_df = self.robustDEGs(
-                        compare, gene_detect_df, nosampled_DEG, DEG_df, pval_df, lfc_df, tau)    
-                    deg_df_alls.append(deg_df_all)
-                    pval_dfs.append(pval_df)
-                    
-                    Lrs_dict[compare] = Lrs
-                    tau_dict[compare] = tau
-                    q_dict[compare] = q
-                    PFER_dict[compare] = PFER
-                    robustDEGs.append(robustDEG_summary)
-                else:
-                    gene_detect_df = self.get_gene_detect_df(by=by)
-                    deg_df = self.get_deg_df(self.gad, by, state, state_conv, gene_detect_df)
-                    deg_df_alls.append(deg_df)
+                for case in range(2):
+                    if case == 0:
+                        state_conv = 'others'
+                        by = f'celltype_{state}'
+                        compare =f'{state}_{state_conv}'
+                    else:
+                        state_conv = state
+                        state = 'others'
+                        by = f'celltype_{state}'
+                        compare = f'{state_conv}_{state}'
+                        
+                    if self.repeat:
+                        DEG_df, lfc_df, pval_df = self.DEA_result_per_gene(deg_df_all, compare)
+                        Lrs, tau, q, PFER, nosampled_DEG = self.compute_tau(gene_detect_df, DEG_df, by, state, state_conv)
+                        robustDEG_summary, pval_df = self.robustDEGs(
+                            compare, gene_detect_df, nosampled_DEG, DEG_df, pval_df, lfc_df, tau)    
+                        deg_df_alls.append(deg_df_all)
+                        pval_dfs.append(pval_df)
+                        
+                        Lrs_dict[compare] = Lrs
+                        tau_dict[compare] = tau
+                        q_dict[compare] = q
+                        PFER_dict[compare] = PFER
+                        robustDEGs.append(robustDEG_summary)
+                    else:
+                        gene_detect_df = self.get_gene_detect_df(by=by)
+                        deg_df = self.get_deg_df(self.gad, by, state, state_conv, gene_detect_df)
+                        deg_df_alls.append(deg_df)
 
         if self.repeat:
             robustDEGs = pd.concat(robustDEGs)
