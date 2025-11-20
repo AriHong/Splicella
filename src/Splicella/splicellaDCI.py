@@ -151,7 +151,11 @@ class SplicellaDCI_pairwise:
 
     def splicelladci(self, 
                      valid_gene_threshold=5, 
-                     valid_isoform_threshold=10):
+                     valid_isoform_threshold=10,
+                    groups=None):
+        if groups is not None:
+            self.states = list(set(groups)&set(self.states))
+            
         self.vg_threshold = valid_gene_threshold
         self.vi_threshold = valid_isoform_threshold
         
@@ -332,6 +336,9 @@ class SplicellaDCI_nonpairwise:
         self.vi_threshold = valid_isoform_threshold        
         self.get_isoform_preval()
         self.DCI_test()
+
+
+
 
 
 

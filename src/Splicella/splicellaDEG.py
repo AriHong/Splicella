@@ -80,6 +80,8 @@ class SplicellaDEG_sampling:
         res = sc.get.rank_genes_groups_df(filtered_adata, group=state1)
         res['DEG'] = (res[self.pval_column]<=pval_cutoff)&(res['logfoldchanges']>=lfc_cutoff)
         res['compare'] = f'{state1}_{state2}'
+        res['state'] = state1
+        res['state_conv'] = state2
         return res
 
 
@@ -178,7 +180,7 @@ class SplicellaDEG_sampling:
                     PFER_dict[compare] = PFER
                     robustDEGs.append(robustDEG_summary)
                 else:
-                    deg_df = self.get_deg_df(self.gad, self.states, state, state_conv, self.gene_detect_df)
+                    deg_df = self.get_deg_df(self.gad, self.state, state, state_conv, self.gene_detect_df)
                     deg_df_alls.append(deg_df)
 
         else:

@@ -5,27 +5,30 @@ from sklearn.metrics.pairwise import nan_euclidean_distances
 from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, fcluster, optimal_leaf_ordering, dendrogram
 from scipy.cluster.hierarchy import leaves_list
+import itertools
+import seaborn as sns
+
 class SplicellaPSI:
     def __init__(self,
                 exon_anndata, by,
                 include_layer='include_raw', total_layer='total_raw', 
                 pseudocount=0.5, mintotalsum=10):
         self.ead = exon_anndata
-        self.by = by
+        self.state = by
         self.include_layer = include_layer
         self.total_layer = total_layer
         self.pseudocount = pseudocount
         self.min_total_per_group = mintotalsum
 
-        if not hasattr(self.ead, 'obs') or self.by not in self.ead.obs.columns:
-            raise ValueError(f"The provided by column {self.by} does not exist in the adata object.")
+        if not hasattr(self.ead, 'obs') or self.state not in self.ead.obs.columns:
+            raise ValueError(f"The provided by column {self.state} does not exist in the adata object.")
 
     def compute_group_psi(self):
         """
         get PSI per exon
         """
-        agg_inc = sc.get.aggregate(self.ead, by=self.by, layer=self.include_layer, func='sum')
-        agg_tot = sc.get.aggregate(self.ead, by=self.by, layer=self.total_layer,   func='sum')
+        agg_inc = sc.get.aggregate(self.ead, by=self.state, layer=self.include_layer, func='sum')
+        agg_tot = sc.get.aggregate(self.ead, by=self.state, layer=self.total_layer,   func='sum')
     
         inc = agg_inc.layers['sum']
         tot = agg_tot.layers['sum']
@@ -83,7 +86,7 @@ def get_pseudogroup(adata, time_key='velocity_pseudotime', n_groups=5,
     return(p_group)
 
 def get_optimalgroup(adata, time_key='velocity_pseudotime', group_min=3, group_max=10,
-                     include_layer='inlucde_raw', total_layer='total_raw', 
+                     include_layer='include_raw', total_layer='total_raw', 
                 pseudocount=0.5, mintotalsum=10, delta_thr=.5):
     for i in range(group_min, group_max+1):
         adata.obs[f'p_group{i}'] = get_pseudogroup(adata, time_key, i)
@@ -94,10 +97,10 @@ def get_optimalgroup(adata, time_key='velocity_pseudotime', group_min=3, group_m
     
     for k in range(group_min, group_max+1):
         group_col = f"p_group{k}"
-        scp = SplicellaPSI(adata, group_col,
+        spcPSI = SplicellaPSI(adata, group_col,
                            include_layer=include_layer, total_layer=total_layer,
                            pseudocount=pseudocount, mintotalsum=mintotalsum)
-        hve_flag, max_delta, n_compared = scp.call_hVE_from_deltas(delta_thr)
+        hve_flag, max_delta, n_compared = spcPSI.call_hVE_from_deltas(delta_thr)
     
         res = pd.DataFrame({
             'max_delta_psi': max_delta,
@@ -105,15 +108,15 @@ def get_optimalgroup(adata, time_key='velocity_pseudotime', group_min=3, group_m
             'hVE': hve_flag
         })
         results_by_k[k] = {
-            'psi': scp.psi_df,
-            'tot': scp.psi_df,
-            'deltas': scp.deltas_dict,
+            'psi': spcPSI.psi_df,
+            'tot': spcPSI.tot_df,
+            'deltas': spcPSI.deltas_dict,
             'summary': res
         }
     
-        hve_sets_by_k[k] = set(res.index[res['hVE']])
+        hve_sets_by_k[k] = set(res.index[hve_flag])
     
-        hve = pd.DataFrame(self.deltas_dict)[res['hVE']]
+        hve = pd.DataFrame(spcPSI.deltas_dict)[hve_flag]
         min_obs_ratio_cols = 0.6
         
         col_keep = hve.notna().mean(axis=0) >= min_obs_ratio_cols
@@ -130,19 +133,49 @@ def get_trimmed_eve(df, min_obs_ratio_rows=.6, min_obs_ratio_cols=.6):
     col_keep = df.notna().mean(axis=0) >= min_obs_ratio_cols
     return df.loc[row_keep, col_keep]
 
-def get_cluster(psi_df, hVE_deltas, k, linkagemethod='ward', clustercriterion='maxclust'):
+
+def get_linkage(psi_df, hVE_deltas, linkagemethod='ward'):
     psi_df = psi_df.T
     psi_df_ = psi_df.loc[hVE_deltas.index]
     Distance = nan_euclidean_distances(psi_df_.values)
     psi_df_ = psi_df_.iloc[np.setdiff1d(np.arange(psi_df_.shape[0]),
                           np.unique(np.argwhere(np.isnan(Distance)).ravel()))]
     Distance = nan_euclidean_distances(psi_df_.values)
-    Z = linkage(squareform(Distance, checks=False), linkagemethod='ward')
-    labels_exon = fcluster(Z, t=k, clustercriterion=clustercriterion)
-    exon_labels = pd.Series(labels_exon, index=psi_df_.index, name='cluster')
+    Z = linkage(squareform(Distance, checks=False), method=linkagemethod)
+    return Z
+    
 
-    
-    return exon_labels
-    
+def get_cluster(psi_df, hVE_deltas,
+                Z, k, clustercriterion='maxclust', clustermap=False,
+               ):
+    psi_df_ = psi_df.T
+    psi_df_ = psi_df_.loc[hVE_deltas.index]
+    labels_exon = fcluster(Z, t=k, criterion=clustercriterion)
+    exon_labels = pd.Series(labels_exon, index=psi_df_.index, name='cluster')
+    if clustermap:
+        leaf_order = leaves_list(Z)
+        ordered = psi_df_.iloc[leaf_order]
+        unique_clusters = sorted(exon_labels.unique())
+        palette = sns.color_palette("Set2", n_colors=len(unique_clusters))
+        lut = dict(zip(unique_clusters, palette))
+        
+        row_colors = exon_labels.loc[ordered.index].map(lut)
+        
+        cg = sns.clustermap(
+            ordered.fillna(0), 
+            cmap="Spectral_r", 
+            row_colors=row_colors, 
+            row_cluster=False, 
+            col_cluster=False,
+            mask=ordered.isna(),
+            linewidths=0,
+            figsize=(12, 10),
+            cbar_kws=dict(label='PSI'),
+            yticklabels=False,
+        )
+        
+        return exon_labels, cg
+    else:
+        return exon_labels
     
 
